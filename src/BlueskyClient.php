@@ -10,6 +10,7 @@ use NotificationChannels\Bluesky\Exceptions\CouldNotCreateSession;
 use NotificationChannels\Bluesky\Exceptions\CouldNotRefreshSession;
 use NotificationChannels\Bluesky\Exceptions\CouldNotResolveHandle;
 use NotificationChannels\Bluesky\Exceptions\CouldNotUploadBlob;
+use Intervention\Image\Facades\Image;
 use ValueError;
 
 final class BlueskyClient
@@ -20,6 +21,7 @@ final class BlueskyClient
     public const CREATE_RECORD_ENDPOINT = 'com.atproto.repo.createRecord';
     public const UPLOAD_BLOB_ENDPOINT = 'com.atproto.repo.uploadBlob';
     public const RESOLVE_HANDLE_ENDPOINT = 'com.atproto.identity.resolveHandle';
+    public const BLOB_MAX_SIZE = 1 * 1024 * 1024; // 1MB
 
     public function __construct(
         protected readonly HttpClient $httpClient,
@@ -116,6 +118,15 @@ final class BlueskyClient
 
         if (!$content) {
             throw CouldNotUploadBlob::couldNotLoadImage();
+        }
+
+        if (mb_strlen($content) > self::BLOB_MAX_SIZE) {
+            $image = Image::make($content);
+            $image->resize(1024, 1024, function ($constraint) {
+                $constraint->aspectRatio();
+                $constraint->upsize();
+            });
+            $content = $image->encode($image->extension, 80);
         }
 
         $response = $this->httpClient
